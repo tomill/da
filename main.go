@@ -83,6 +83,7 @@ func (a *app) setup(head string) {
 
 		v.bar.Title = fmt.Sprint(i)
 		v.bar.BarWidth = 10
+		v.log.Text = strings.Repeat(" ", 100)
 
 		a.data[i] = v
 		layer = append(layer, ui.NewRow(h,
@@ -137,6 +138,7 @@ func (a *app) update(input string) {
 			values = append(values, d.total[k])
 		}
 
+		d.log.Text = v + "\n" + d.log.Text[:100]
 		d.bar.Data = values
 		d.bar.Labels = keys
 
@@ -144,10 +146,5 @@ func (a *app) update(input string) {
 		d.pie.LabelFormatter = func(idx int, _ float64) string {
 			return keys[idx]
 		}
-
-		if len(d.log.Text) > 100 {
-			d.log.Text = d.log.Text[:100]
-		}
-		d.log.Text = v + "\n" + d.log.Text
 	}
 }
