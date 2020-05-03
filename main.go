@@ -33,12 +33,15 @@ type item struct {
 }
 
 func main() {
+	flag.Parse()
+	if fi, _ := os.Stdin.Stat(); (fi.Mode() & os.ModeCharDevice) != 0 {
+		os.Exit(0)
+	}
+
 	if err := ui.Init(); err != nil {
 		log.Fatal(err)
 	}
 	defer ui.Close()
-
-	fmt.Print("loading...")
 
 	stdin := bufio.NewScanner(os.Stdin)
 	stdin.Scan()
@@ -59,9 +62,14 @@ func main() {
 		case e := <-ev:
 			switch e.Type {
 			case ui.ResizeEvent:
-				a.display()
+				a.redraw()
 			case ui.KeyboardEvent:
-				return // quit
+				switch e.ID {
+				case "r", "<Space>":
+					a.redraw()
+				default: // e.g. "q"
+					return // quit
+				}
 			}
 		}
 	}
