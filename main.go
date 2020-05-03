@@ -2,17 +2,23 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 )
 
-const Delimiter = "\t"
+var (
+	ignoreEmpty = flag.Bool("ignore-empty", true, "")
+	numericSort = flag.Bool("numeric-sort", true, "")
+	delimiter   = flag.String("delimiter", "\t", "")
+)
 
 type app struct {
 	grid *ui.Grid
@@ -63,7 +69,7 @@ func main() {
 
 func (a *app) setup(head string) {
 	a.data = map[int]*item{}
-	n := make([]int, len(strings.Split(head, Delimiter)))
+	n := make([]int, len(strings.Split(head, *delimiter)))
 	h := 1.0 / float64(len(n))
 
 	var layer []interface{}
@@ -88,17 +94,20 @@ func (a *app) setup(head string) {
 
 	a.grid = ui.NewGrid()
 	a.grid.Set(layer...)
-	a.display()
+	a.redraw()
 }
 
-func (a *app) display() {
+func (a *app) redraw() {
 	w, h := ui.TerminalDimensions()
 	a.grid.SetRect(0, 0, w, h)
 }
 
 func (a *app) update(input string) {
-	for i, v := range strings.Split(input, Delimiter) {
+	for i, v := range strings.Split(input, *delimiter) {
 		if len(a.data) < i {
+			return
+		}
+		if v == "" && !*ignoreEmpty {
 			return
 		}
 
@@ -109,7 +118,19 @@ func (a *app) update(input string) {
 		for k := range d.total {
 			keys = append(keys, k)
 		}
-		sort.Strings(keys)
+
+		if *numericSort {
+			sort.Slice(keys, func(i, j int) bool {
+				a, e1 := strconv.Atoi(keys[i])
+				b, e2 := strconv.Atoi(keys[j])
+				if e1 != nil || e2 != nil {
+					return keys[i] < keys[j]
+				}
+				return a < b
+			})
+		} else {
+			sort.Strings(keys)
+		}
 
 		var values []float64
 		for _, k := range keys {
