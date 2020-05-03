@@ -2,17 +2,23 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 )
 
-const Delimiter = "\t"
+var (
+	ignoreEmpty = flag.Bool("ignore-empty", true, "")
+	numericSort = flag.Bool("numeric-sort", true, "")
+	delimiter   = flag.String("delimiter", "\t", "")
+)
 
 type app struct {
 	grid *ui.Grid
@@ -27,12 +33,15 @@ type item struct {
 }
 
 func main() {
+	flag.Parse()
+	if fi, _ := os.Stdin.Stat(); (fi.Mode() & os.ModeCharDevice) != 0 {
+		os.Exit(0)
+	}
+
 	if err := ui.Init(); err != nil {
 		log.Fatal(err)
 	}
 	defer ui.Close()
-
-	fmt.Print("loading...")
 
 	stdin := bufio.NewScanner(os.Stdin)
 	stdin.Scan()
@@ -53,9 +62,14 @@ func main() {
 		case e := <-ev:
 			switch e.Type {
 			case ui.ResizeEvent:
-				a.display()
+				a.redraw()
 			case ui.KeyboardEvent:
-				return // quit
+				switch e.ID {
+				case "r", "<Space>":
+					a.redraw()
+				default: // e.g. "q"
+					return // quit
+				}
 			}
 		}
 	}
@@ -63,7 +77,7 @@ func main() {
 
 func (a *app) setup(head string) {
 	a.data = map[int]*item{}
-	n := make([]int, len(strings.Split(head, Delimiter)))
+	n := make([]int, len(strings.Split(head, *delimiter)))
 	h := 1.0 / float64(len(n))
 
 	var layer []interface{}
@@ -77,6 +91,7 @@ func (a *app) setup(head string) {
 
 		v.bar.Title = fmt.Sprint(i)
 		v.bar.BarWidth = 10
+		v.log.Text = strings.Repeat(" ", 100)
 
 		a.data[i] = v
 		layer = append(layer, ui.NewRow(h,
@@ -88,17 +103,20 @@ func (a *app) setup(head string) {
 
 	a.grid = ui.NewGrid()
 	a.grid.Set(layer...)
-	a.display()
+	a.redraw()
 }
 
-func (a *app) display() {
+func (a *app) redraw() {
 	w, h := ui.TerminalDimensions()
 	a.grid.SetRect(0, 0, w, h)
 }
 
 func (a *app) update(input string) {
-	for i, v := range strings.Split(input, Delimiter) {
+	for i, v := range strings.Split(input, *delimiter) {
 		if len(a.data) < i {
+			return
+		}
+		if v == "" && !*ignoreEmpty {
 			return
 		}
 
@@ -109,13 +127,26 @@ func (a *app) update(input string) {
 		for k := range d.total {
 			keys = append(keys, k)
 		}
-		sort.Strings(keys)
+
+		if *numericSort {
+			sort.Slice(keys, func(i, j int) bool {
+				a, e1 := strconv.Atoi(keys[i])
+				b, e2 := strconv.Atoi(keys[j])
+				if e1 != nil || e2 != nil {
+					return keys[i] < keys[j]
+				}
+				return a < b
+			})
+		} else {
+			sort.Strings(keys)
+		}
 
 		var values []float64
 		for _, k := range keys {
 			values = append(values, d.total[k])
 		}
 
+		d.log.Text = v + "\n" + d.log.Text[:100]
 		d.bar.Data = values
 		d.bar.Labels = keys
 
@@ -123,10 +154,5 @@ func (a *app) update(input string) {
 		d.pie.LabelFormatter = func(idx int, _ float64) string {
 			return keys[idx]
 		}
-
-		if len(d.log.Text) > 100 {
-			d.log.Text = d.log.Text[:100]
-		}
-		d.log.Text = v + "\n" + d.log.Text
 	}
 }
