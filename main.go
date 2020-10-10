@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
@@ -56,7 +57,9 @@ func main() {
 		}
 	}()
 
+	tick := time.Tick(5 * time.Second)
 	ev := ui.PollEvents()
+
 	for {
 		select {
 		case e := <-ev:
@@ -71,6 +74,8 @@ func main() {
 					return // quit
 				}
 			}
+		case <-tick:
+			a.redraw()
 		}
 	}
 }
@@ -89,7 +94,7 @@ func (a *app) setup(head string) {
 			log:   widgets.NewParagraph(),
 		}
 
-		v.bar.Title = fmt.Sprint(i)
+		v.bar.Title = fmt.Sprintf(" column %d ", i)
 		v.bar.BarWidth = 10
 		v.log.Text = strings.Repeat(" ", 100)
 
@@ -116,7 +121,7 @@ func (a *app) update(input string) {
 		if len(a.data) < i {
 			return
 		}
-		if v == "" && !*ignoreEmpty {
+		if v == "" && *ignoreEmpty {
 			return
 		}
 
