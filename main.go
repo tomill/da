@@ -16,15 +16,16 @@ import (
 )
 
 var (
-	ignoreEmpty = flag.Bool("ignore-empty", true, "")
-	numericSort = flag.Bool("numeric-sort", true, "")
 	delimiter   = flag.String("delimiter", "\t", "")
+	ignoreEmpty = flag.Bool("ignore-empty", true, "Do not show blank value count in a bar chart.")
+	numericSort = flag.Bool("numeric-sort", true, "Sort the horizontal axis of a bar chart by numeric.")
+	redrawEvery = flag.Int64("redraw-every", 5, "Redraws the screen cleanly every specified number of seconds.")
 )
 
 type app struct {
 	grid  *ui.Grid
 	speed *widgets.Plot
-	count float64
+	lines float64
 	data  map[int]*item
 }
 
@@ -60,7 +61,7 @@ func main() {
 		}
 	}()
 
-	redraw := time.Tick(5 * time.Second)
+	redraw := time.Tick(time.Duration(*redrawEvery) * time.Second)
 	traffic := time.Tick(1 * time.Second)
 	ev := ui.PollEvents()
 
@@ -133,12 +134,12 @@ func (a *app) redraw() {
 }
 
 func (a *app) traffic() {
-	a.speed.Data[0] = append(a.speed.Data[0], a.count)
-	a.count = 0
+	a.speed.Data[0] = append(a.speed.Data[0], a.lines)
+	a.lines = 0
 }
 
 func (a *app) update(input string) {
-	a.count++
+	a.lines++
 	for i, v := range strings.Split(input, *delimiter) {
 		if len(a.data) < i {
 			return
