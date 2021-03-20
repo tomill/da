@@ -27,7 +27,8 @@ type app struct {
 }
 
 type item struct {
-	total map[string]float64
+	count map[string]float64
+	input []string
 	bar   *widgets.BarChart
 	pie   *widgets.PieChart
 	log   *widgets.Paragraph
@@ -88,15 +89,16 @@ func (a *app) setup(head string) {
 	var layer []interface{}
 	for i, _ := range n {
 		v := &item{
-			total: map[string]float64{},
+			count: map[string]float64{},
+			input: make([]string, 100),
 			bar:   widgets.NewBarChart(),
 			pie:   widgets.NewPieChart(),
 			log:   widgets.NewParagraph(),
 		}
 
-		v.bar.Title = fmt.Sprintf(" column %d ", i)
+		v.bar.Title = fmt.Sprintf(" column %d ", i+1)
 		v.bar.BarWidth = 10
-		v.log.Text = strings.Repeat(" ", 100)
+		v.log.Text = strings.Join(v.input, "\n")
 
 		a.data[i] = v
 		layer = append(layer, ui.NewRow(h,
@@ -126,21 +128,22 @@ func (a *app) update(input string) {
 		}
 
 		d := a.data[i]
-		d.total[v] += 1
+		d.count[v] += 1
+		d.input = append([]string{v}, d.input[:100]...)
 
 		var keys []string
-		for k := range d.total {
+		for k := range d.count {
 			keys = append(keys, k)
 		}
 
 		if *numericSort {
 			sort.Slice(keys, func(i, j int) bool {
-				a, e1 := strconv.Atoi(keys[i])
-				b, e2 := strconv.Atoi(keys[j])
+				ii, e1 := strconv.Atoi(keys[i])
+				jj, e2 := strconv.Atoi(keys[j])
 				if e1 != nil || e2 != nil {
 					return keys[i] < keys[j]
 				}
-				return a < b
+				return ii < jj
 			})
 		} else {
 			sort.Strings(keys)
@@ -148,10 +151,10 @@ func (a *app) update(input string) {
 
 		var values []float64
 		for _, k := range keys {
-			values = append(values, d.total[k])
+			values = append(values, d.count[k])
 		}
 
-		d.log.Text = v + "\n" + d.log.Text[:100]
+		d.log.Text = strings.Join(d.input, "\n")
 		d.bar.Data = values
 		d.bar.Labels = keys
 
