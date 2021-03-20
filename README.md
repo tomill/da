@@ -6,6 +6,10 @@ $ tail -F some.log | jq --unbuffered -cr '[ .country, .place, .device.os ] | @ts
 
 <img src="./demo.gif" width="100%">
 
+## Download
+
+<https://github.com/tomill/da/releases>
+
 ## Options
 
 ```
