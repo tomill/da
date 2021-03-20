@@ -16,18 +16,22 @@ import (
 )
 
 var (
-	ignoreEmpty = flag.Bool("ignore-empty", true, "")
-	numericSort = flag.Bool("numeric-sort", true, "")
 	delimiter   = flag.String("delimiter", "\t", "")
+	ignoreEmpty = flag.Bool("ignore-empty", true, "Do not show blank value count in a bar chart.")
+	numericSort = flag.Bool("numeric-sort", true, "Sort the horizontal axis of a bar chart by numeric.")
+	redrawEvery = flag.Int64("redraw-every", 5, "Redraws the screen cleanly every specified number of seconds.")
 )
 
 type app struct {
-	grid *ui.Grid
-	data map[int]*item
+	grid  *ui.Grid
+	speed *widgets.Plot
+	lines float64
+	data  map[int]*item
 }
 
 type item struct {
-	total map[string]float64
+	count map[string]float64
+	input []string
 	bar   *widgets.BarChart
 	pie   *widgets.PieChart
 	log   *widgets.Paragraph
@@ -57,7 +61,8 @@ func main() {
 		}
 	}()
 
-	tick := time.Tick(5 * time.Second)
+	redraw := time.Tick(time.Duration(*redrawEvery) * time.Second)
+	traffic := time.Tick(1 * time.Second)
 	ev := ui.PollEvents()
 
 	for {
@@ -74,7 +79,9 @@ func main() {
 					return // quit
 				}
 			}
-		case <-tick:
+		case <-traffic:
+			a.traffic()
+		case <-redraw:
 			a.redraw()
 		}
 	}
@@ -83,20 +90,30 @@ func main() {
 func (a *app) setup(head string) {
 	a.data = map[int]*item{}
 	n := make([]int, len(strings.Split(head, *delimiter)))
-	h := 1.0 / float64(len(n))
+	h := 1.0 / float64(len(n)+1)
+
+	a.speed = widgets.NewPlot()
+	a.speed.Title = " / sec "
+	a.speed.Data = [][]float64{{0, 0}}
+	a.speed.LineColors = []ui.Color{ui.ColorGreen}
 
 	var layer []interface{}
+	layer = append(layer, ui.NewRow(h,
+		ui.NewCol(1.0, a.speed),
+	))
+
 	for i, _ := range n {
 		v := &item{
-			total: map[string]float64{},
+			count: map[string]float64{},
+			input: make([]string, 100),
 			bar:   widgets.NewBarChart(),
 			pie:   widgets.NewPieChart(),
 			log:   widgets.NewParagraph(),
 		}
 
-		v.bar.Title = fmt.Sprintf(" column %d ", i)
+		v.bar.Title = fmt.Sprintf(" column %d ", i+1)
 		v.bar.BarWidth = 10
-		v.log.Text = strings.Repeat(" ", 100)
+		v.log.Text = strings.Join(v.input, "\n")
 
 		a.data[i] = v
 		layer = append(layer, ui.NewRow(h,
@@ -116,7 +133,13 @@ func (a *app) redraw() {
 	a.grid.SetRect(0, 0, w, h)
 }
 
+func (a *app) traffic() {
+	a.speed.Data[0] = append(a.speed.Data[0], a.lines)
+	a.lines = 0
+}
+
 func (a *app) update(input string) {
+	a.lines++
 	for i, v := range strings.Split(input, *delimiter) {
 		if len(a.data) < i {
 			return
@@ -126,21 +149,22 @@ func (a *app) update(input string) {
 		}
 
 		d := a.data[i]
-		d.total[v] += 1
+		d.count[v] += 1
+		d.input = append([]string{v}, d.input[:100]...)
 
 		var keys []string
-		for k := range d.total {
+		for k := range d.count {
 			keys = append(keys, k)
 		}
 
 		if *numericSort {
 			sort.Slice(keys, func(i, j int) bool {
-				a, e1 := strconv.Atoi(keys[i])
-				b, e2 := strconv.Atoi(keys[j])
+				ii, e1 := strconv.Atoi(keys[i])
+				jj, e2 := strconv.Atoi(keys[j])
 				if e1 != nil || e2 != nil {
 					return keys[i] < keys[j]
 				}
-				return a < b
+				return ii < jj
 			})
 		} else {
 			sort.Strings(keys)
@@ -148,10 +172,10 @@ func (a *app) update(input string) {
 
 		var values []float64
 		for _, k := range keys {
-			values = append(values, d.total[k])
+			values = append(values, d.count[k])
 		}
 
-		d.log.Text = v + "\n" + d.log.Text[:100]
+		d.log.Text = strings.Join(d.input, "\n")
 		d.bar.Data = values
 		d.bar.Labels = keys
 
