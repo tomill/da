@@ -22,8 +22,10 @@ var (
 )
 
 type app struct {
-	grid *ui.Grid
-	data map[int]*item
+	grid  *ui.Grid
+	speed *widgets.Plot
+	count float64
+	data  map[int]*item
 }
 
 type item struct {
@@ -58,7 +60,8 @@ func main() {
 		}
 	}()
 
-	tick := time.Tick(5 * time.Second)
+	redraw := time.Tick(5 * time.Second)
+	traffic := time.Tick(1 * time.Second)
 	ev := ui.PollEvents()
 
 	for {
@@ -75,7 +78,9 @@ func main() {
 					return // quit
 				}
 			}
-		case <-tick:
+		case <-traffic:
+			a.traffic()
+		case <-redraw:
 			a.redraw()
 		}
 	}
@@ -84,9 +89,18 @@ func main() {
 func (a *app) setup(head string) {
 	a.data = map[int]*item{}
 	n := make([]int, len(strings.Split(head, *delimiter)))
-	h := 1.0 / float64(len(n))
+	h := 1.0 / float64(len(n)+1)
+
+	a.speed = widgets.NewPlot()
+	a.speed.Title = " / sec "
+	a.speed.Data = [][]float64{{0, 0}}
+	a.speed.LineColors = []ui.Color{ui.ColorGreen}
 
 	var layer []interface{}
+	layer = append(layer, ui.NewRow(h,
+		ui.NewCol(1.0, a.speed),
+	))
+
 	for i, _ := range n {
 		v := &item{
 			count: map[string]float64{},
@@ -118,7 +132,13 @@ func (a *app) redraw() {
 	a.grid.SetRect(0, 0, w, h)
 }
 
+func (a *app) traffic() {
+	a.speed.Data[0] = append(a.speed.Data[0], a.count)
+	a.count = 0
+}
+
 func (a *app) update(input string) {
+	a.count++
 	for i, v := range strings.Split(input, *delimiter) {
 		if len(a.data) < i {
 			return
